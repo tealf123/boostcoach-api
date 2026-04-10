@@ -4,7 +4,7 @@ from anthropic import Anthropic
 def generate_coaching_report(replay_bytes, filename="replay.replay"):
     try:
         message = Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY')).messages.create(
-            model="claude-3-opus-20240229",
+            model="claude-haiku-4-5",
             max_tokens=1024,
             system="""You are a Rocket League coach analyzing replays. Provide:
 1. Match Overview
@@ -34,7 +34,7 @@ Be direct and specific. 300-500 words.""",
 def generate_qa_response(coaching_report, question):
     try:
         message = Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY')).messages.create(
-            model="claude-3-opus-20240229",
+            model="claude-haiku-4-5",
             max_tokens=512,
             system="You are a Rocket League coach. Answer briefly and specifically.",
             messages=[
