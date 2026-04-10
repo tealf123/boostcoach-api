@@ -9,6 +9,7 @@ from carball_parser import parse_replay
 from coaching_engine import generate_coaching_report
 from database import get_db_cursor
 import json
+import traceback
 
 bp = Blueprint('replay', __name__, url_prefix='/api/replays')
 
@@ -21,20 +22,18 @@ def allowed_file(filename):
 def upload_replay():
     """Upload and process a replay file"""
     try:
-    
-    # Check if file is in request
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file part'}), 400
-    
-    file = request.files['file']
-    
-    if file.filename == '':
-        return jsonify({'error': 'No selected file'}), 400
-    
-    if not allowed_file(file.filename):
-        return jsonify({'error': 'Only .replay files allowed'}), 400
-    
-    try:
+        # Check if file is in request
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file part'}), 400
+        
+        file = request.files['file']
+        
+        if file.filename == '':
+            return jsonify({'error': 'No selected file'}), 400
+        
+        if not allowed_file(file.filename):
+            return jsonify({'error': 'Only .replay files allowed'}), 400
+        
         # For now, assume user_id is 1 (auth not yet implemented)
         user_id = request.form.get('user_id', 1)
         
@@ -43,18 +42,12 @@ def upload_replay():
         replay_path = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
         file.save(replay_path)
         
-        # Parse replay with Carball
-        parsed_result = parse_replay(replay_path)
-        
-        if parsed_result['status'] != 'success':
-            return jsonify({
-                'error': 'Failed to parse replay',
-                'details': parsed_result.get('error')
-            }), 400
+        # Parse replay
+        with open(replay_path, 'rb') as f:
+            replay_bytes = f.read()
         
         # Generate coaching report
-        parsed_data = json.loads(parsed_result['raw_data'])
-        coaching_result = generate_coaching_report(parsed_data)
+        coaching_result = generate_coaching_report(replay_bytes, filename)
         
         if coaching_result['status'] != 'success':
             return jsonify({
@@ -70,7 +63,7 @@ def upload_replay():
                 INSERT INTO analyses 
                 (user_id, replay_filename, replay_raw_path, parsed_data, coaching_report)
                 VALUES (?, ?, ?, ?, ?)
-            ''', (user_id, filename, replay_path, parsed_result['raw_data'], coaching_report))
+            ''', (user_id, filename, replay_path, json.dumps({'file_size': len(replay_bytes)}), coaching_report))
             
             analysis_id = cursor.lastrowid
         
@@ -79,13 +72,11 @@ def upload_replay():
             'analysis_id': analysis_id,
             'replay_filename': filename,
             'coaching_report': coaching_report,
-            'parsed_summary': parsed_result['summary']
+            'parsed_summary': {'file_size': len(replay_bytes)}
         }), 201
     
     except Exception as e:
-        import traceback
-        error_trace = traceback.format_exc()
-        return jsonify({'error': str(e), 'trace': error_trace}), 500
+        return jsonify({'error': str(e), 'trace': traceback.format_exc()}), 500
 
 @bp.route('', methods=['GET'])
 def list_analyses():
