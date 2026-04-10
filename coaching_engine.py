@@ -1,22 +1,37 @@
 import os
 from anthropic import Anthropic
+import json
 
-def generate_coaching_report(replay_bytes, filename="replay.replay"):
+def generate_coaching_report(parsed_data):
+    """Generate coaching from parsed replay data"""
     try:
+        # Format data for Claude
+        context = f"""Match Data:
+- Duration: {parsed_data.get('duration', 0)} seconds
+- Map: {parsed_data.get('map', 'Unknown')}
+- Playlist: {parsed_data.get('playlist', 'Unknown')}
+
+Teams:
+"""
+        for team in parsed_data.get('teams', []):
+            context += f"\n{team['name']}:\n"
+            for player in team.get('players', []):
+                context += f"  - {player['name']}: {player['goals']} goals, {player['assists']} assists, {player['saves']} saves, {player['shots']} shots\n"
+        
         message = Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY')).messages.create(
             model="claude-haiku-4-5",
             max_tokens=1024,
-            system="""You are a Rocket League coach analyzing replays. Provide:
-1. Match Overview
-2. What Went Well  
-3. Top 3 Improvements
-4. Practice Drill
+            system="""You are a Rocket League coach. Analyze the match data and provide:
+1. Match Overview (who won, key stats)
+2. What Went Well (positive patterns)
+3. Top 3 Improvements (specific, actionable)
+4. Practice Drill (one focused drill)
 
-Be direct and specific. 300-500 words.""",
+Be direct, specific, encouraging. 300-500 words.""",
             messages=[
                 {
                     "role": "user",
-                    "content": f"Rocket League replay uploaded ({filename}). Provide general coaching advice for improvement."
+                    "content": f"Analyze this Rocket League match and provide coaching:\n\n{context}"
                 }
             ]
         )

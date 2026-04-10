@@ -2,6 +2,7 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 import os
 from coaching_engine import generate_coaching_report, generate_qa_response
+from replay_parser import upload_to_ballchasing
 from uuid import uuid4
 
 app = Flask(__name__)
@@ -72,12 +73,19 @@ def upload():
     try:
         file = request.files['file']
         replay_bytes = file.read()
-        result = generate_coaching_report(replay_bytes, file.filename)
+        
+        # Parse with ballchasing
+        parse_result = upload_to_ballchasing(replay_bytes, file.filename)
+        if parse_result['status'] != 'success':
+            return jsonify({'error': f"Parse failed: {parse_result['error']}"}), 500
+        
+        # Generate coaching
+        result = generate_coaching_report(parse_result['summary'])
         if result['status'] != 'success':
-            print(f"Coaching error: {result['error']}")
             return jsonify({'error': f"Coaching failed: {result['error']}"}), 500
+        
         aid = str(uuid4())
-        analyses_store[aid] = {'report': result['report']}
+        analyses_store[aid] = {'report': result['report'], 'summary': parse_result['summary']}
         return jsonify({'status': 'success', 'analysis_id': aid, 'coaching_report': result['report']}), 201
     except Exception as e:
         print(f"Upload error: {e}")
