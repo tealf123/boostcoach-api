@@ -4,10 +4,8 @@ import base64
 
 def generate_coaching_report(replay_bytes, filename="replay.replay"):
     try:
-        replay_b64 = base64.b64encode(replay_bytes).decode('utf-8')[:500]
-        
         message = Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY')).messages.create(
-            model="claude-opus-4-1",
+            model="claude-3-haiku-20240307",
             max_tokens=1024,
             system="""You are a Rocket League coach. Analyze this replay and provide:
 1. Match Overview
@@ -15,11 +13,11 @@ def generate_coaching_report(replay_bytes, filename="replay.replay"):
 3. Top 3 Improvements
 4. Practice Drill
 
-Be direct, specific, encouraging. 400-600 words.""",
+Be direct, specific, encouraging. 300-500 words.""",
             messages=[
                 {
                     "role": "user",
-                    "content": f"Analyze this Rocket League replay ({filename}, {len(replay_bytes)} bytes) and provide coaching."
+                    "content": f"A Rocket League replay file ({filename}) was uploaded. Without being able to parse the binary format, provide general Rocket League coaching advice based on common improvement areas for players. Focus on: positioning, rotation, boost management, and decision-making."
                 }
             ]
         )
@@ -38,7 +36,7 @@ Be direct, specific, encouraging. 400-600 words.""",
 def generate_qa_response(coaching_report, question):
     try:
         message = Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY')).messages.create(
-            model="claude-opus-4-1",
+            model="claude-3-haiku-20240307",
             max_tokens=512,
             system="You are a Rocket League coach answering questions. Be concise and specific.",
             messages=[
