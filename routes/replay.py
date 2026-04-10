@@ -7,9 +7,9 @@ import os
 from werkzeug.utils import secure_filename
 from carball_parser import parse_replay
 from coaching_engine import generate_coaching_report
-from database import get_db_cursor
 import json
 import traceback
+from uuid import uuid4
 
 bp = Blueprint('replay', __name__, url_prefix='/api/replays')
 
@@ -22,7 +22,6 @@ def allowed_file(filename):
 def upload_replay():
     """Upload and process a replay file"""
     try:
-        # Check if file is in request
         if 'file' not in request.files:
             return jsonify({'error': 'No file part'}), 400
         
@@ -34,15 +33,12 @@ def upload_replay():
         if not allowed_file(file.filename):
             return jsonify({'error': 'Only .replay files allowed'}), 400
         
-        # For now, assume user_id is 1 (auth not yet implemented)
-        user_id = request.form.get('user_id', 1)
-        
-        # Save file
+        # Save file temporarily
         filename = secure_filename(file.filename)
         replay_path = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
         file.save(replay_path)
         
-        # Parse replay
+        # Read replay bytes
         with open(replay_path, 'rb') as f:
             replay_bytes = f.read()
         
@@ -57,15 +53,14 @@ def upload_replay():
         
         coaching_report = coaching_result['report']
         
-        # Store in database
-        with get_db_cursor() as cursor:
-            cursor.execute('''
-                INSERT INTO analyses 
-                (user_id, replay_filename, replay_raw_path, parsed_data, coaching_report)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (user_id, filename, replay_path, json.dumps({'file_size': len(replay_bytes)}), coaching_report))
-            
-            analysis_id = cursor.lastrowid
+        # Store in memory (MVP)
+        from app import analyses_store
+        analysis_id = str(uuid4())
+        analyses_store[analysis_id] = {
+            'filename': filename,
+            'coaching_report': coaching_report,
+            'file_size': len(replay_bytes)
+        }
         
         return jsonify({
             'status': 'success',
@@ -80,41 +75,22 @@ def upload_replay():
 
 @bp.route('', methods=['GET'])
 def list_analyses():
-    """List user's analyses"""
-    user_id = request.args.get('user_id', 1)  # TODO: Get from auth token
-    
-    with get_db_cursor() as cursor:
-        cursor.execute('''
-            SELECT id, replay_filename, created_at FROM analyses
-            WHERE user_id = ?
-            ORDER BY created_at DESC
-        ''', (user_id,))
-        
-        analyses = [dict(row) for row in cursor.fetchall()]
-    
-    return jsonify({'analyses': analyses}), 200
+    """List analyses"""
+    from app import analyses_store
+    return jsonify({'analyses': list(analyses_store.keys())}), 200
 
-@bp.route('/<int:analysis_id>', methods=['GET'])
+@bp.route('/<analysis_id>', methods=['GET'])
 def get_analysis(analysis_id):
-    """Get a specific analysis and coaching report"""
+    """Get a specific analysis"""
+    from app import analyses_store
     
-    with get_db_cursor() as cursor:
-        cursor.execute('''
-            SELECT id, replay_filename, parsed_data, coaching_report, created_at
-            FROM analyses WHERE id = ?
-        ''', (analysis_id,))
-        
-        row = cursor.fetchone()
-        
-        if not row:
-            return jsonify({'error': 'Analysis not found'}), 404
-        
-        analysis = {
-            'id': row['id'],
-            'replay_filename': row['replay_filename'],
-            'parsed_data': json.loads(row['parsed_data']),
-            'coaching_report': row['coaching_report'],
-            'created_at': row['created_at']
-        }
+    if analysis_id not in analyses_store:
+        return jsonify({'error': 'Analysis not found'}), 404
     
-    return jsonify(analysis), 200
+    data = analyses_store[analysis_id]
+    return jsonify({
+        'id': analysis_id,
+        'replay_filename': data['filename'],
+        'coaching_report': data['coaching_report'],
+        'file_size': data['file_size']
+    }), 200

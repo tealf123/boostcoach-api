@@ -3,10 +3,11 @@ BoostCoach API - Rocket League AI Coaching Platform
 Main Flask application
 """
 
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 import os
 from dotenv import load_dotenv
+from uuid import uuid4
 
 load_dotenv()
 
@@ -15,22 +16,13 @@ CORS(app)
 
 # Configuration
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB max file size
-app.config['UPLOAD_FOLDER'] = 'uploads'
-app.config['DATABASE'] = 'boostcoach.db'
+app.config['UPLOAD_FOLDER'] = '/tmp/boostcoach'
 
-# Create upload directory if it doesn't exist
+# Create upload directory
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-# Initialize database
-from database import init_db
-init_db()
-
-# Import routes
-from routes import auth, replay, coaching
-
-app.register_blueprint(auth.bp)
-app.register_blueprint(replay.bp)
-app.register_blueprint(coaching.bp)
+# In-memory storage for MVP (no database)
+analyses_store = {}
 
 @app.route('/', methods=['GET'])
 def index():
@@ -39,6 +31,12 @@ def index():
 @app.route('/health', methods=['GET'])
 def health():
     return jsonify({'status': 'ok'}), 200
+
+# Import routes
+from routes import replay, coaching
+
+app.register_blueprint(replay.bp)
+app.register_blueprint(coaching.bp)
 
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))
