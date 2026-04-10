@@ -1,10 +1,5 @@
-from flask import Flask, jsonify
-
-app = Flask(__name__)
-
-@app.route('/health', methods=['GET'])
-def health():
-    return jsonify({'status': 'ok'}), 200
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8080)
+def app(environ, start_response):
+    status = '200 OK'
+    headers = [('Content-type', 'application/json')]
+    start_response(status, headers)
+    return [b'{"status":"ok"}']
