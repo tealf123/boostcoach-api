@@ -7,7 +7,7 @@ def generate_coaching_report(replay_bytes, filename="replay.replay"):
         replay_b64 = base64.b64encode(replay_bytes).decode('utf-8')[:500]
         
         message = Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY')).messages.create(
-            model="claude-3-5-sonnet-20240620",
+            model="claude-opus-4-1",
             max_tokens=1024,
             system="""You are a Rocket League coach. Analyze this replay and provide:
 1. Match Overview
@@ -38,7 +38,7 @@ Be direct, specific, encouraging. 400-600 words.""",
 def generate_qa_response(coaching_report, question):
     try:
         message = Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY')).messages.create(
-            model="claude-3-5-sonnet-20240620",
+            model="claude-opus-4-1",
             max_tokens=512,
             system="You are a Rocket League coach answering questions. Be concise and specific.",
             messages=[
