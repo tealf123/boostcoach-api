@@ -20,6 +20,7 @@ def allowed_file(filename):
 @bp.route('/upload', methods=['POST'])
 def upload_replay():
     """Upload and process a replay file"""
+    try:
     
     # Check if file is in request
     if 'file' not in request.files:
@@ -82,7 +83,9 @@ def upload_replay():
         }), 201
     
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        import traceback
+        error_trace = traceback.format_exc()
+        return jsonify({'error': str(e), 'trace': error_trace}), 500
 
 @bp.route('', methods=['GET'])
 def list_analyses():
