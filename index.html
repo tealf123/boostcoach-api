@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BoostCoach - Rocket League AI Coaching</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white">
+    <div class="min-h-screen flex flex-col">
+        <!-- Header -->
+        <header class="bg-gradient-to-r from-blue-600 to-blue-800 p-6">
+            <div class="max-w-4xl mx-auto">
+                <h1 class="text-3xl font-bold">BoostCoach</h1>
+                <p class="text-blue-100">AI-powered Rocket League coaching</p>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex-1 max-w-4xl mx-auto w-full p-6">
+            <!-- Upload Section -->
+            <div id="uploadSection" class="bg-gray-800 rounded-lg p-8 mb-8">
+                <h2 class="text-2xl font-bold mb-4">Upload Your Replay</h2>
+                <p class="text-gray-300 mb-6">Upload a .replay file to get AI coaching on your gameplay</p>
+                
+                <div class="border-2 border-dashed border-blue-400 rounded-lg p-8 text-center cursor-pointer hover:border-blue-300 transition" id="dropZone">
+                    <input type="file" id="replayInput" accept=".replay" style="display: none;">
+                    <svg class="w-12 h-12 mx-auto mb-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                    </svg>
+                    <p class="text-lg font-semibold mb-2">Drop your replay file here</p>
+                    <p class="text-gray-400">or click to select</p>
+                </div>
+
+                <button id="uploadBtn" class="mt-6 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed">
+                    Analyze Replay
+                </button>
+
+                <div id="uploadStatus" class="mt-4 text-sm text-gray-400"></div>
+            </div>
+
+            <!-- Loading Section (hidden by default) -->
+            <div id="loadingSection" class="hidden bg-gray-800 rounded-lg p-8 text-center">
+                <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400 mb-4"></div>
+                <p class="text-lg">Parsing replay and generating coaching...</p>
+                <p class="text-sm text-gray-400 mt-2">This may take 30-60 seconds</p>
+            </div>
+
+            <!-- Report Section (hidden by default) -->
+            <div id="reportSection" class="hidden">
+                <div class="bg-gray-800 rounded-lg p-8 mb-8">
+                    <h2 class="text-2xl font-bold mb-4">Your Coaching Report</h2>
+                    <div id="coachingReport" class="bg-gray-700 rounded p-6 whitespace-pre-wrap text-gray-100 leading-relaxed"></div>
+                </div>
+
+                <!-- Match Summary -->
+                <div class="bg-gray-800 rounded-lg p-8 mb-8">
+                    <h3 class="text-xl font-bold mb-4">Match Summary</h3>
+                    <div id="matchSummary" class="grid grid-cols-2 gap-4"></div>
+                </div>
+
+                <!-- Q&A Section -->
+                <div class="bg-gray-800 rounded-lg p-8">
+                    <h3 class="text-xl font-bold mb-4">Ask a Question</h3>
+                    <div class="flex gap-2 mb-4">
+                        <input type="text" id="questionInput" placeholder="Ask about a specific play or your gameplay..." class="flex-1 bg-gray-700 text-white rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400">
+                        <button id="askBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded">Ask</button>
+                    </div>
+                    <div id="qaHistory" class="space-y-4"></div>
+                </div>
+
+                <!-- Back Button -->
+                <button id="backBtn" class="mt-8 w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded">
+                    Upload Another Replay
+                </button>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="bg-gray-800 text-center p-4 text-sm text-gray-400">
+            <p>BoostCoach MVP • Get AI coaching on your Rocket League replays</p>
+        </footer>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:5000/api';
+        let currentAnalysisId = null;
+
+        // File upload handling
+        const dropZone = document.getElementById('dropZone');
+        const replayInput = document.getElementById('replayInput');
+        const uploadBtn = document.getElementById('uploadBtn');
+
+        dropZone.addEventListener('click', () => replayInput.click());
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('border-blue-300', 'bg-gray-700');
+        });
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('border-blue-300', 'bg-gray-700');
+        });
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('border-blue-300', 'bg-gray-700');
+            replayInput.files = e.dataTransfer.files;
+            uploadBtn.disabled = false;
+        });
+
+        replayInput.addEventListener('change', () => {
+            uploadBtn.disabled = !replayInput.files[0];
+        });
+
+        // Upload replay
+        uploadBtn.addEventListener('click', async () => {
+            const file = replayInput.files[0];
+            if (!file) return;
+
+            uploadBtn.disabled = true;
+            document.getElementById('uploadStatus').textContent = 'Uploading...';
+            document.getElementById('uploadSection').classList.add('hidden');
+            document.getElementById('loadingSection').classList.remove('hidden');
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('user_id', 1);
+
+            try {
+                const response = await fetch(`${API_URL}/replays/upload`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Upload failed: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                currentAnalysisId = data.analysis_id;
+
+                // Display report
+                displayReport(data);
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('uploadStatus').textContent = `Error: ${error.message}`;
+                document.getElementById('loadingSection').classList.add('hidden');
+                document.getElementById('uploadSection').classList.remove('hidden');
+                uploadBtn.disabled = false;
+            }
+        });
+
+        // Display report
+        function displayReport(data) {
+            document.getElementById('loadingSection').classList.add('hidden');
+            document.getElementById('reportSection').classList.remove('hidden');
+            document.getElementById('coachingReport').textContent = data.coaching_report;
+
+            // Display match summary
+            const summary = data.parsed_summary;
+            let summaryHTML = `
+                <div><strong>Map:</strong> ${summary.map}</div>
+                <div><strong>Playlist:</strong> ${summary.playlist}</div>
+                <div><strong>Duration:</strong> ${Math.round(summary.duration / 60)} minutes</div>
+            `;
+
+            summary.teams.forEach(team => {
+                const teamName = team.is_orange ? 'Orange Team' : 'Blue Team';
+                summaryHTML += `<div><strong>${teamName}:</strong> ${team.players.map(p => p.name).join(', ')}</div>`;
+            });
+
+            document.getElementById('matchSummary').innerHTML = summaryHTML;
+        }
+
+        // Q&A
+        document.getElementById('askBtn').addEventListener('click', askQuestion);
+        document.getElementById('questionInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') askQuestion();
+        });
+
+        async function askQuestion() {
+            const question = document.getElementById('questionInput').value;
+            if (!question || !currentAnalysisId) return;
+
+            document.getElementById('questionInput').value = '';
+            document.getElementById('askBtn').disabled = true;
+
+            try {
+                const response = await fetch(`${API_URL}/analyses/${currentAnalysisId}/ask`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question })
+                });
+
+                if (!response.ok) throw new Error(`Error: ${response.statusText}`);
+
+                const data = await response.json();
+
+                // Add to history
+                const qaDiv = document.createElement('div');
+                qaDiv.className = 'bg-gray-700 rounded p-4';
+                qaDiv.innerHTML = `
+                    <p class="font-semibold text-blue-400 mb-2">Q: ${question}</p>
+                    <p class="text-gray-100">A: ${data.response}</p>
+                `;
+                document.getElementById('qaHistory').appendChild(qaDiv);
+            } catch (error) {
+                console.error('Error:', error);
+                alert(`Error asking question: ${error.message}`);
+            } finally {
+                document.getElementById('askBtn').disabled = false;
+            }
+        }
+
+        // Back button
+        document.getElementById('backBtn').addEventListener('click', () => {
+            replayInput.value = '';
+            currentAnalysisId = null;
+            document.getElementById('reportSection').classList.add('hidden');
+            document.getElementById('uploadSection').classList.remove('hidden');
+            document.getElementById('uploadBtn').disabled = false;
+            document.getElementById('qaHistory').innerHTML = '';
+        });
+    </script>
+</body>
+</html>

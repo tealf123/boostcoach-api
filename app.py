@@ -3,7 +3,7 @@ BoostCoach API - Rocket League AI Coaching Platform
 Main Flask application
 """
 
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 import os
 from dotenv import load_dotenv
@@ -31,6 +31,10 @@ from routes import auth, replay, coaching
 app.register_blueprint(auth.bp)
 app.register_blueprint(replay.bp)
 app.register_blueprint(coaching.bp)
+
+@app.route('/', methods=['GET'])
+def index():
+    return open('index.html').read(), 200, {'Content-Type': 'text/html'}
 
 @app.route('/health', methods=['GET'])
 def health():
