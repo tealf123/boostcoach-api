@@ -74,11 +74,15 @@ def upload():
         replay_bytes = file.read()
         result = generate_coaching_report(replay_bytes, file.filename)
         if result['status'] != 'success':
-            return jsonify({'error': 'Coaching failed'}), 500
+            print(f"Coaching error: {result['error']}")
+            return jsonify({'error': f"Coaching failed: {result['error']}"}), 500
         aid = str(uuid4())
         analyses_store[aid] = {'report': result['report']}
         return jsonify({'status': 'success', 'analysis_id': aid, 'coaching_report': result['report']}), 201
     except Exception as e:
+        print(f"Upload error: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/analyses/<aid>/ask', methods=['POST'])
