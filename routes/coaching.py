@@ -1,54 +1,29 @@
-"""
-Interactive coaching Q&A routes
-"""
-
 from flask import Blueprint, request, jsonify
 from coaching_engine import generate_qa_response
-import traceback
 
 bp = Blueprint('coaching', __name__, url_prefix='/api/analyses')
 
-@bp.route('/<analysis_id>/ask', methods=['POST'])
-def ask_question(analysis_id):
-    """Ask a question about the match"""
-    from app import analyses_store
-    
-    if analysis_id not in analyses_store:
-        return jsonify({'error': 'Analysis not found'}), 404
-    
-    data = request.get_json()
-    question = data.get('question', '')
-    
-    if not question:
-        return jsonify({'error': 'No question provided'}), 400
-    
+@bp.route('/<aid>/ask', methods=['POST'])
+def ask_question(aid):
     try:
-        coaching_report = analyses_store[analysis_id]['coaching_report']
+        from app import analyses_store
+        if aid not in analyses_store:
+            return jsonify({'error': 'Not found'}), 404
         
-        # Generate Q&A response
-        response_result = generate_qa_response(coaching_report, question)
+        data = request.get_json()
+        q = data.get('question', '')
+        if not q:
+            return jsonify({'error': 'No question'}), 400
         
-        if response_result['status'] != 'success':
-            return jsonify({
-                'error': 'Failed to generate response',
-                'details': response_result.get('error')
-            }), 500
+        report = analyses_store[aid]['report']
+        result = generate_qa_response(report, q)
+        
+        if result['status'] != 'success':
+            return jsonify({'error': 'Failed'}), 500
         
         return jsonify({
-            'status': 'success',
-            'question': question,
-            'response': response_result['response']
-        }), 201
-    
+            'question': q,
+            'response': result['response']
+        }), 200
     except Exception as e:
-        return jsonify({'error': str(e), 'trace': traceback.format_exc()}), 500
-
-@bp.route('/<analysis_id>/conversation', methods=['GET'])
-def get_conversation(analysis_id):
-    """Get conversation history (MVP: empty for now)"""
-    from app import analyses_store
-    
-    if analysis_id not in analyses_store:
-        return jsonify({'error': 'Analysis not found'}), 404
-    
-    return jsonify({'conversation': []}), 200
+        return jsonify({'error': str(e)}), 500
