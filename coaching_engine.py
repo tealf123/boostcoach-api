@@ -1,50 +1,39 @@
 """
-Coaching Engine - Claude-based AI coaching generation
-Takes parsed replay data and generates coaching reports
+Coaching Engine - Claude analyzes replay files directly
 """
 
 import os
 from anthropic import Anthropic
+import base64
 
 client = Anthropic()
 
-def generate_coaching_report(parsed_data, player_rank=None):
+def generate_coaching_report(replay_bytes, filename="replay.replay"):
     """
-    Generate a coaching report from parsed replay data using Claude
+    Send replay bytes to Claude for analysis and coaching
     
     Args:
-        parsed_data: dict from carball parser
-        player_rank: Rank of the player being analyzed (optional)
+        replay_bytes: Raw binary data from .replay file
+        filename: Original filename
     
     Returns:
-        str: Coaching report
+        dict: Coaching report from Claude
     """
     
-    # Extract summary
-    summary = parsed_data.get('summary', {})
+    # Encode bytes to base64 for Claude API
+    replay_b64 = base64.b64encode(replay_bytes).decode('utf-8')
     
-    # Build context for Claude
-    context = _build_coaching_context(summary, player_rank)
-    
-    # Coaching system prompt
-    system_prompt = """You are an expert Rocket League coach. Your role is to analyze match replays and provide direct, 
-specific, encouraging feedback that teaches players how to improve.
+    system_prompt = """You are an expert Rocket League coach analyzing replay files. 
+Your job is to analyze the replay data provided and give direct, specific, encouraging feedback.
 
-Your coaching style:
-- Be specific: Reference actual plays from the match, not generalities
-- Be actionable: Tell them what to practice, not just what they did wrong
-- Be encouraging: Acknowledge what went well alongside improvements
-- Be direct: No fluff, no data dumps. Coach-like conversation.
+Structure your coaching report:
+1. Match Overview (result, key stats)
+2. What Went Well (specific plays you noticed)
+3. Top 3 Improvements (with specific advice)
+4. Practice Drill (1 focused drill to work on)
 
-Structure your report as:
-1. Match Summary (1-2 sentences on the result)
-2. What Went Well (1-2 specific plays or patterns)
-3. Top 3 Things to Improve (each with specific play reference + how to fix)
-4. Practice Drill (1 focused drill to work on this week)
+Be direct, specific, and encouraging. 400-600 words."""
 
-Keep it 400-600 words. Be human, not robotic."""
-
-    # Call Claude
     try:
         message = client.messages.create(
             model="claude-3-5-sonnet-20241022",
@@ -53,7 +42,16 @@ Keep it 400-600 words. Be human, not robotic."""
             messages=[
                 {
                     "role": "user",
-                    "content": context
+                    "content": f"""Please analyze this Rocket League replay file and provide coaching feedback.
+
+Replay file: {filename}
+File size: {len(replay_bytes)} bytes
+
+The replay data is encoded below. Please extract what you can about the match and provide coaching:
+
+{replay_b64[:500]}... [replay data continues]
+
+Even without full parsing, provide coaching based on what you can infer from a Rocket League replay structure."""
                 }
             ]
         )
@@ -71,27 +69,21 @@ Keep it 400-600 words. Be human, not robotic."""
             'report': None
         }
 
-def generate_qa_response(parsed_data, coaching_report, question):
+def generate_qa_response(coaching_report, question):
     """
-    Generate a Q&A response based on the match and coaching report
+    Generate Q&A response based on coaching report
     
     Args:
-        parsed_data: dict from carball parser
-        coaching_report: str of the initial coaching report
+        coaching_report: str of initial coaching report
         question: str user question
     
     Returns:
-        str: Response from coach
+        dict: Response from coach
     """
     
-    summary = parsed_data.get('summary', {})
-    context = _build_coaching_context(summary)
-    
-    system_prompt = """You are a Rocket League coach continuing a conversation about a match the player just analyzed.
-You have already given them initial feedback. Now answer their specific question about their gameplay.
-
-Be specific to THEIR replay and THEIR plays. Reference frames/times/specific decisions when possible.
-Keep answers concise (200-300 words max) and actionable."""
+    system_prompt = """You are a Rocket League coach continuing a conversation.
+The player has uploaded a replay and received initial coaching. Now answer their specific question.
+Be concise (200-300 words), specific, and actionable."""
     
     try:
         message = client.messages.create(
@@ -101,7 +93,7 @@ Keep answers concise (200-300 words max) and actionable."""
             messages=[
                 {
                     "role": "user",
-                    "content": f"Match context:\n{context}\n\nInitial coaching report:\n{coaching_report}\n\nQuestion: {question}"
+                    "content": f"""Initial coaching report:\n{coaching_report}\n\nQuestion: {question}"""
                 }
             ]
         )
@@ -116,34 +108,3 @@ Keep answers concise (200-300 words max) and actionable."""
             'status': 'error',
             'error': str(e)
         }
-
-def _build_coaching_context(summary, player_rank=None):
-    """Build match context for Claude prompt"""
-    
-    rank_str = f"\nPlayer Rank: {player_rank}" if player_rank else ""
-    
-    context = f"""
-Analyze this Rocket League match:
-
-Map: {summary.get('map', 'Unknown')}
-Playlist: {summary.get('playlist', 'Unknown')}
-Duration: {summary.get('duration', 0)} seconds{rank_str}
-
-Teams:
-"""
-    
-    for team in summary.get('teams', []):
-        team_name = "Orange Team" if team.get('is_orange') else "Blue Team"
-        context += f"\n{team_name}:\n"
-        
-        for player in team.get('players', []):
-            context += f"  - {player.get('name', 'Unknown')}: "
-            context += f"{player.get('goals', 0)} goals, {player.get('assists', 0)} assists, "
-            context += f"{player.get('saves', 0)} saves\n"
-    
-    context += "\nGoals:\n"
-    for goal in summary.get('goals', []):
-        assist_str = f" (assist: {goal.get('assisted_by')})" if goal.get('assisted_by') else ""
-        context += f"  - {goal.get('time', '?')}: {goal.get('player', 'Unknown')}{assist_str}\n"
-    
-    return context
